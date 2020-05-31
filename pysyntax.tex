@@ -1,0 +1,281 @@
+%%%%------------------------------------------------------------------------%%%%
+%%%%           Semestrální práce z předmětu BI-TEX (pysyntax.tex)           %%%%
+%%%%------------------------------------------------------------------------%%%%
+%%%%
+%%%% Zvýraznění syntaxe programovacího jazyka Python za pomoci makra OPmac
+%%%% a použití existujících zvýraznění publikovaných na OPmac-Tricks.
+%%%%
+%%%% Autor: Petr Krajnik, krajnpet@fit.cvut.cz, LS2016
+%%%% Historie hlavních změn viz konec tohoto zdrojového souboru.
+%%%%
+%%%% TODO: Nejspíš už nic. :-)
+%%%%
+\ifx\PySyntaxVersion\undefined\else \endinput \fi
+\def\PySyntaxVersion {Apr.30 2016}
+\immediate\write16 {This is PySyntax (Python synt. hightlighting for OPmac),
+	version <\PySyntaxVersion>}
+
+%%%% Definice zpráv pro toto makro.
+\def\PySyntaxMessage #1#2{%
+	\immediate\write16 {l.\the\inputlineno\space PySyntax #1: #2}%
+}
+\def\PySyntaxError   #1{\PySyntaxMessage{ERROR}{#1}\expandafter\end}
+\def\PySyntaxWarning #1{\PySyntaxMessage{WARNING}{#1}}
+
+%%%% Kontroly pro OPmac (vložení a verze).
+\ifx\OPmacversion\undefined
+	\PySyntaxError {For this macro OPmac must be loaded first.
+		Please insert "\string\input opmac" before that line.}%
+\fi
+\ifx\ptthook\undefined
+	\PySyntaxError {Loaded OPmac version must be later or equal
+		than version <Oct. 2015>. Implementing "\string\ptthook".}%
+\fi
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%% Optimalizovaná verze makra pro hledání a nahrazení retězce.
+\bgroup\catcode`\!=3\catcode`\?=3
+	%% Vyhledání a nahrazení vzorku v obsahu makra \tmpb.
+	\gdef\replacestringx #1#2{%
+		\long\def\findpatternA ##1#1##2#1{\ifx !##2\relax \addto\tmpb{##1}\else
+			\addto\tmpb{##1#2##2}\expandafter\findpattern\fi}%
+		\long\def\findpattern ##1#1{\ifx !##1\relax\else
+			\addto\tmpb{#2##1}\expandafter\findpattern\fi}%
+		\edef\tmpb{\expandafter}\expandafter\findpatternA\tmpb ?#1!#1%
+		\expandafter\removeEoS\tmpb
+	}
+	%% Vyhledání vzorku ohraničeným vzorky #1<OBSAH>#2 a nahradí ji #3 v \tmpb.
+	\gdef\replacerange #1#2#3{%
+		\long\def\findpattern ##1#1##2#2{\ifx!##2\addto\tmpb{##1}\else
+			\addto\tmpb{##1#3}\expandafter\findpattern\fi}%
+		\edef\tmpb{\expandafter}\expandafter\findpattern\tmpb ?#1!#2%
+		\expandafter\removeEoS\tmpb
+	}
+	%%%% Odstranění konce znaku řetězu. (EoS=EndOfString)
+	\gdef\removeEoS #1?{\def\tmpb{#1}}
+\egroup
+
+%%%% Změna makra provedení vícenásobného nahrazení.
+\def\doreplace #1#2 from #3{%
+	\def\replace ##1{\ifx^##1^\else
+		\replacestringx{#1}{#2}\expandafter\replace\fi}%
+	\expandafter\replace #3{}%
+}
+
+%%%% Zapnutí lokální vs. globální zvýraznění syntaxe verbatim.
+\def\hisyntax  #1{\bgroup \addto\tthook{\obeytabs}%
+	\def\ptthook{\csname hisyntax#1\endcsname}}
+\def\ghisyntax #1{\addto\tthook{\obeytabs}%
+	\def\ppthook{\bgroup\csname hisyntax#1\endcsname}}
+
+%%%% Zpracování odstazení tabulátory.
+\newcount\tabSpaceCount \tabSpaceCount=4
+\def\tabSkip {\ifnum\tabSpaceCount>0%
+	\hskip \tabSpaceCount\fontdimen2\tentt\fi}
+\def\obeytabs{\catcode`\^^I=\active}
+\bgroup %% Chceme, aby v případě použití "nerozbil" makro begtt.
+	\obeytabs\global\let^^I=\space
+\egroup
+
+%%% Zvýraznění syntaxe jazyka Python.
+\def\hisyntaxPy #1\egroup{%
+	%% Označení mezer, tabulátorů a konců řádků...
+	\letMarksRelax
+	\adef{ }{\n\ \n}\adef\^^I{\n\INDENT\n}\adef\^^M{\n\NLh\n}%
+	\edef\tmpb{#1\egroup}%
+	%% Označkování elementů kódu Pythonu...
+	\markEOF
+	\markStringLitPy
+	\markCommentsPy
+	\markOperatorsPy
+	\markKeywordsPy
+	\markNumbersPy
+	\markStrPrefixPy
+	\markDecorators
+	%% Sazba označkovaného kódu...
+	\let\INDENT=\tabSkip
+	\def\O ##1{{\opStylePy ##1}}\let\STR=\PySyntaxFormat \let\U=\PySyntaxFormat
+	\let\n=\empty \let\NLh=\par
+	\localcolor\identStylePy \tentt\tmpb\egroup
+}
+\def\letMarksRelax {%
+	\let\U=\relax \let\O=\relax \let\STR=\relax \let\INDENT=\relax
+	\let\n=\relax \let\NLh=\relax
+}
+%%%% Formát číslování řádků.
+\def\printttline{\llap{\sevenrm\Black\the\ttline\kern.9em}}
+
+%%%% Makra pro označkování zdrojáku.
+\def\markEOF {\replacestringx{\n\egroup}{\egroup}}
+\def\markCommentsPy {%
+	\expandafter\replacerange
+		\expandafter{\string##}{\NLh}{\U{commentStylePy}{\###2}\NLh}%
+}
+\def\markOperatorsPy {%
+	\doreplace{##1}{\n\O##1\n} from \opListPy
+}
+\def\markKeywordsPy {%
+	\doreplace{\n##1\n}{\U{kwStylePy}{##1}} from \kwListPy
+	\replacerange{\n class\n}{\n\O(\n}%
+		{\U{kwStylePy}{class}\U{clsNameStylePy}{##2}\n\O(\n}%
+	\replacerange{\n def\n}{\n\O(\n}%
+		{\U{kwStylePy}{def}\U{defNameStylePy}{##2}\n\O(\n}%
+}
+\def\markDecorators {%
+	\edef\tmpcmd {\noexpand\replacerange{%
+		\n\O\string@\n}{\NLh}{\U{decorStylePy}{\string@####2}\NLh}}
+	\tmpcmd
+}
+
+%%%% Zanačkování řetězcových literálů.
+\def\markStringLitPy {\removeStrEscapes
+	%% Uvozovací značky literálu.
+	\replacestringx{"""}{\nextStrMark0{"""}}%
+	\replacestringx{'''}{\nextStrMark1{'''}}%
+	\replacestringx{"}{\nextStrMark2"}%
+	\replacestringx{'}{\nextStrMark3'}%
+	%% Označkování...
+	\edef\tmpb{\tmpb}%
+}
+\edef\removeStrEscapes {%
+	\noexpand\replacestringx{\string\"}{{\string\"}}%
+	\noexpand\replacestringx{\string\'}{{\string\'}}%
+}
+\def\nextStrMarkEmpty #1#2#3#4{}
+\def\getStrStyle #1{\ifcase #1strMLStylePy\or strMLStylePy\else strSLStylePy\fi}
+\def\identity #1{#1} %% Odstraní obklopujici {}.
+\def\nextStrMark #1#2#3\nextStrMark#4#5{%
+	\if#1#4\STR{\getStrStyle #1}{#2#3#5}\expandafter\nextStrMarkEmpty
+		\else \expandafter\nextStrMark
+	\fi {#1}{#2}\identity{#3#5}%
+}
+\def\markStrPrefixPy {%
+	\doreplace{\n ##1\STR}{\tmp{##1}} from \strPrefListPy
+	\def\tmp ##1##2##3{\n\STR{##2}{##1##3}}%
+	\edef\tmpb{\tmpb}%
+}
+
+%%%% Označkování čísel.
+\def\markNumbersPy {%
+	%% Normální čísla.
+	\replacerange{\n0}{\n}{\numbStart0##2\end}%
+	\replacerange{\n1}{\n}{\numbStart1##2\end}%
+	\replacerange{\n2}{\n}{\numbStart2##2\end}%
+	\replacerange{\n3}{\n}{\numbStart3##2\end}%
+	\replacerange{\n4}{\n}{\numbStart4##2\end}%
+	\replacerange{\n5}{\n}{\numbStart5##2\end}%
+	\replacerange{\n6}{\n}{\numbStart6##2\end}%
+	\replacerange{\n7}{\n}{\numbStart7##2\end}%
+	\replacerange{\n8}{\n}{\numbStart8##2\end}%
+	\replacerange{\n9}{\n}{\numbStart9##2\end}%
+	%% Desetiná čísla.
+	\replacestringx{\end\O.\numbStart}{.}%
+	\replacestringx{\end\O.\n}{.\end}%
+	\replacestringx{\n\O.\numbStart}{\numbStart.}%
+	% %% Vědecký zápis.
+	\replacerange{\end e}{\n}{e##2\end}%% Případ 2.e123
+	\replacerange{\end E}{\n}{E##2\end}%%
+	\doreplace{e\end\O ##1\numbStart}{e##1} from {+-}%
+	\doreplace{E\end\O ##1\numbStart}{E##1} from {+-}%
+	%% Komplexní čísla.
+	\replacestringx{\end j}{j\end}%
+	%% Vlastní provedení označkování.
+	\edef\tmpb{\tmpb}%
+}
+\def\numbStart #1\end{\n\U{numbStylePy}{#1}\n}
+
+%%%% Seznam klíčových slov
+%%%% Pozn: bez def a class. Ty jsou zpracovány zvlášť.
+\def\kwListPy {%
+	{and}{as}{assert}{async}{await}{break}{continue}{del}{elif}{else}{except}%
+	{exec}{False}{finally}{for}{from}{global}{if}{import}{in}{is}{lambda}{None}%
+	{nonlocal}{not}{or}{pass}{print}{raise}{return}{True}{try}{while}{with}%
+	{yield}}
+%%%% Seznam operátorů.
+\edef\opListPy {+-*//=<>()[]:,.;!\percent
+	\string}\string{\string@\string&\string|\string~\string^}
+%%%% Seznam prefixů stringových literálů.
+\def\strPrefListPy {uUrRbB{br}{Br}{bR}{BR}{rb}{rB}{Rb}{RB}}
+
+%%%% Dodatečné defince barev.
+\def\LightBlue {\setcmykcolor{1 0.43 0 0}}
+\def\Orange    {\setcmykcolor{0 0.64 1 0}}
+
+%%%% Styly formátování jednotlivých elementů.
+\def\setStylePy #1{%
+	\expandafter\ifx\csname stylePy#1\endcsname\relax
+		\PySyntaxWarning{Style with the name '#1' not found.}%
+	\fi \csname stylePy#1\endcsname
+}
+\def\stylePyDEFAULT {%
+	%% Standradní styl zvýraznění.
+	\let\commentStylePy=\Green
+	\let\opStylePy=\Blue
+	\let\kwStylePy=\LightBlue
+	\let\clsNameStylePy=\Black
+	\let\defNameStylePy=\Magenta
+	\let\numbStylePy=\Red
+	\let\identStylePy=\Black
+	\let\strMLStylePy=\Orange
+	\let\decorStylePy=\Magenta
+	\def\strSLStylePy{\def\ {\char32}\Grey}%
+}
+\def\stylePyIDLE {%
+	%% Styl zvýraznění z editoru IDLE. (obsažen v instalaci Pythonu)
+	\let\commentStylePy=\Red
+	\let\opStylePy=\Black
+	\let\kwStylePy=\Orange
+	\let\clsNameStylePy=\LightBlue
+	\let\defNameStylePy=\LightBlue
+	\let\numbStylePy=\Black
+	\let\identStylePy=\Black
+	\let\strMLStylePy=\Green
+	\let\decorStylePy=\Black
+	\def\strSLStylePy {\def\ {\char32}\Green}%
+}
+\stylePyDEFAULT %% Standardní styl.
+
+%%%% Formátování elementu daným stylem.
+\def\PySyntaxFormat #1#2{{%
+	\expandafter\ifx\csname #1\endcsname\relax
+		\PySyntaxWarning {Element formating style '#1' not found.}%
+	\else
+		\csname #1Hook\endcsname %% Předzpracování.
+		\csname #1\endcsname     %% Nastavení stylu.
+	\fi	#2% Výstup obsahu elementu.
+}}
+
+%%%% Předzpracování, abychom zabránili problémům při vnoření elementů.
+\def\commentStylePyHook{\def\STR ##1##2{##2}}
+
+\endinput
+
+%%%%%%%%%%%%%% History of versions:
+
+Apr.04 2016 Iniciální verze makra PySyntax.
+Apr.08 2016 Makro \replacestrings nahrazeno optimalizovaným \replacestringx.
+Apr.10 2016 Vložení kontrol pro používané makro OPmac.
+            Přidání klíčových slov "async" a "await", které přišly s Python3.5.
+            Vyřešení vnořených komentářů.
+            Barvení v definicích funkcí.
+Apr.11 2016 Ošetření tabulátorů, které indikují bloky.
+            Úprava představení makra, aby nedocházelo k zalamování v konzoli.
+Apr.16 2016 Přidání makra \replacerange a zjednodušení kódu.
+            Přidání zbylých operátorů a oddělovačů dle specifikace jazyka.
+            Přidání prefixových operátorů před stringy.
+Apr.17 2016 Zvýraznění čísel podle specifikace jazyka (plně).
+Apr.20 2016 Zavedení přepínačů stylů.
+            Přidání nastavitelného rozměru tabulátorů.
+Apr.24 2016 Přepracování stylů a jejich nastavení.
+            Přizpůsobení stylu chyb a varování tomu co je v OPmac.
+            Refaktorizace a sjednocení celého kódu.
+            Přidání zvýraznění dekorátorů jazyka Python.
+Apr.26 2016 Přidání háků pro předzpracování těsně před formátováním.
+            Ošetření řetězců vnořených v komentářích pomocí háků.
+Apr.28 2016 Odstraněný chybový případ v \replacestringx a \replacerange pomocí
+            znaku '?'. Nutnost použití je stejná jako v \replacestrings.
+       INFO Odevzdání ke kontrole.
+Apr.30 2016 Rozšíření dekorátorů na celý řádek místo na identifikátor.
+
+%%%%%%%%%%%%%% EOF pysyntax.tex

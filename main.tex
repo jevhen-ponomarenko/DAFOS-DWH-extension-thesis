@@ -1,0 +1,1093 @@
+% The documentation of the usage of CTUstyle -- the template for
+% typessetting thesis by plain\TeX at CTU in Prague
+% ---------------------------------------------------------------------
+% Petr Olsak  Jan. 2013
+
+% You can copy this file to your own file and do some changes.
+% Then you can run:  pdfcsplain your-file
+
+\input ctustyle2  % The template (in version 2) is included here.
+\input opmac	
+\input pysyntax
+%\input pdfuni    % Uncomment this if you need accented PDFoutlines
+%\input opmac-bib % Uncomment this for direct reading of .bib database files 
+% Type: B = bachelor, M = master, D = Ph.D., O = other
+                 % / the language: CZ = Czech, SK = Slovak, EN = English
+
+\faculty    {F3}  % Type your faculty F1, F2, F3, etc. or MUVS
+            % use main language of your document here:
+\worktype [B/EN] % Type: O = other
+                 % / the language: CZ = Czech, SK = Slovak, EN = English
+% Use main language of your document while filling in the items.
+% The mandatory items: \faculty, \depatment, \title, \author, \date, \address
+% \studyspec, \studyform, \studyinfo, \orohead, \candidate, \supervisor
+
+\faculty    {F3}  % Type your faculty F1, F2, F3, etc.
+\department {Department of Computer Science}
+\title      { Data warehouse extension DAFOS}
+\author     {Jevhen Olehovyč Ponomarenko}
+\date       {Prague, June 2020} 
+\supervisor {Ing. Jiří Šebek}  % One or more supervisors
+\studyinfo  {Software Engineering and Technology}  % Study programme etc.
+\workname   {} % Used only if \worktype [O/*] (Other)
+            % optional more information about the document:
+            % Title / Subtitle in minor language:
+\titleCZ    {Rozšíření datového skladu DAFOS}
+\subtitleEN {}
+            % If minor language is other than English
+            % use \titleCZ, \subtitleCZ or \titleSK, \subtitleSK instead it.
+\pagetwo    {}  % The text printed on the page 2 at the bottom.
+
+\abstractEN {
+This bachelor thesis deals with the automation of ETL in the DAFOS data warehouse. After laying out the requirements for the new ETL framework, it analyzes possible approaches for orchestration of the ETL processes and implements strategies for sub-problems that arose from the full automation. The new patent data set was added into the warehouse using the defined approaches. The solution provides answers to many sub-problems that resulted from shifting control of the ETL from a developer: governance of the newly modified data or data staging area with query capabilities. New technologies were introduced into the technological stack of the warehouse: MongoDB as a staging area solution and Apache Airflow for allowing a unified approach to defining and scheduling the ETL processes. 
+  }
+\abstractCZ {
+Tato bakářská práce se zabývá automatizaci ETL procesů v datovém skladu Technologické agentury České republiky - DAFOS. Po nastavení požadavků na nový ETL framework, analyzuje možná průmyslově využívaní řešení pro orchestraci ETL procesů a implementuje strategie pro řešení problému, které vznikly ztrátou kontroly nad během ETL procesu jako jsou například: dohled nad změnami dat nebo  místo pro ukládání dočasných dat z možnosti dotazování nad nimi. Na základě definovaných postupů integruje nový datový zdroj do datového skladu: kolekci patentů z OPS. Nov technologická řešení byla zařazená do datového skladu: MongoDB jako místo pro ukládání dočasných dat a Apache Airflow pro orchestraci ETL procesů. 
+ }           % If your language is Slovak use \abstractSK instead \abstractCZ
+
+\keywordsEN {%
+Apache Airflow; Django; DAFOS; Starfos; data warehouse; ETL; bachelor thesis; data governance; MongoDB; European Patent Office; TA CR;
+   }
+\keywordsCZ {%
+  Apache Airflow; Django; DAFOS; Starfos; datové sklady; ETL; bakalářská práce; TA ČR; MongoDB; European Patent Office;
+  }
+\thanks {           % Use main language here
+ I want to thank my supervisor Jiří Šebek and colleagues Robert Shönfeld and Radovan Lupták, for valuable advice while writing this thesis. Unique appreciation goes to my family and girlfriend for patience and support during my studies. }
+\declaration {      % Use main language here
+  
+I hereby declare that the presented thesis is my own work and that I have cited all sources of information in accordance with the Guideline for adhering to ethical principles when elaborating an academic final thesis.
+I acknowledge that my thesis is subject to the rights and obligations stipulated by the Act No. 121/2000 Coll., the Copyright Act, as amended, in particular that the Czech Technical University in Prague has the right to conclude a license agreement on the utilization of this thesis as school work under the provisions of Article 60(1) of the Act.
+
+In Prague on June 22, 2020
+   \signature % makes dots
+}
+
+\specification {
+\picw=\hsize \cinspic img/zadani-bez-podpisu.png 
+}
+
+
+%%%%% <--   % The place for your own macros is here.
+
+%\draft     % Uncomment this if the version of your document is working only.
+%\linespacing=1.7  % uncomment this if you need more spaces between lines
+                   % Warning: this works only when \draft is activated!
+%\savetoner        % Turns off the lightBlue backround of tables and
+                   % verbatims, only for \draft version.
+%\blackwhite       % Use this if you need really Black+White thesis.
+%\onesideprinting  % Use this if you really don't use duplex printing. 
+
+\makefront  % Mandatory command. Makes title page, acknowledgment, contents etc.
+
+\hyphenation{chapter}
+\hyphenation{PYTHONPATH}
+\hyphenation{PATSTAT}
+% Don't use \chap command here; only \sec, \secc are recommended.
+%\nonum\notoc\sec Contents
+
+%\maketoc \outlines0  % These commands generates TOC and PDF outlines
+
+
+
+\chap Introduction
+ETL processes are one of the most vital parts of the data warehouse. As the data warehouse grows in data, manual scheduling of these tasks becomes insufficient: dependencies of these tasks have to be well documented, and the whole process requires attention from a developer. 
+A couple of solutions answering the questions on how to design and schedule ETLs effectively in Python were developed in recent years and serve as an industry-standard nowadays. 
+ETL orchestration is not the only requirement needed for better maintainability and extensibility of the DAFOS data warehouse. Subproblems covered in the thesis also include data staging area and solutions for better control of incoming data. 
+
+\sec Structure of the document
+This document is composed of four main chapters. In {\bf Chapter \ref[dwh]} I define key concepts later discussed in the document.  I analyze available solutions for orchestration of ETLs in {\bf Chapter \ref[CHAP:ANAL]} and then automate current scripts handling integration of IS VaVaI data set in {\bf Chapter \ref[CHAP:ISVAV-aut]} and integrate a new data set of patents in {\bf Chapter \ref[CHAP:PATSTAT-INTEGRATION]}.
+
+\label[dwh]\chap Data warehousing
+In the late 1970s, most organizations used relational database systems for storing vital information and supporting day-to-day operations \cite[dwh-spring]. These systems proved to be insufficient as increasing market requirements led to the need for accessing the right information at the right time. As a result, a new set of tools was formed to better support new requirements for improving the operations of businesses. In the 1990s, data warehousing and online analytical processing (OLAP) were developed to help the decision-making process. This involves a set of tools, algorithms, and architectures to allow the accumulation of information from various data sources over a period of time to enable the analysis of its evolution and discovery of strategic information. The universally accepted definition of a data warehouse was developed by Bill Inmon in the 1980s and is “a subject-oriented, integrated, time-variant and non-volatile collection of data used in strategic decision making.”.~\cite[master-dwh]
+\begitems
+* subject-oriented - data is divided into units (e.g tables) by the type, not by the source of data,
+* integrated - warehouse integrates data coming from various sources and in different formats,
+* non-volatile - data warehouses are designed to be ``read-only'', so after data is saved it should not be manually edited~\cite[bi-pour].
+\enditems
+
+\sec ETL processes 
+
+ETL processes are essentially the most important component of DWH \glos{DWH}{Data warehouse}~\cite[master-dwh]. ETL stands for {\it Extract}, {\it Transform}, {\it Load} as these are the stages of data during the process. A properly designed ETL system extracts data from various sources, transforms the data using quality and consistency standards, so that separate sources can be combined. It then saves them in the destination system in a format that can be later easily used by other applications.\cite[toolkit-etl]
+
+The design and implementation of these processes can be a very demanding task, and even though it is a functionality hidden from the users, it easily consumes 70 percent of the resources needed for implementation and maintenance of a typical data warehouse.\cite[toolkit-etl] These components play a key role in defining a ETL framework\cite[toolkit-dwh]:
+
+\begitems
+* Triggers - event listeners, perform logic when some criteria is met,
+* Database tables - destination formations used to store the information,
+* Software libraries - libraries produced by third parties that can be used for more straightforward data transformation,
+* Scripts - abstractions that perform business logic,
+* Notifications - real-time analytics over the system,
+* Schedulers - modules that orchestrate the whole framework.
+\enditems
+
+\chap Technology Agency of the Czech Republic
+
+The Technology Agency of the Czech Republic, {\it an organizational
+unit of the state}, is a state institution that oversees the process of public contests in which funding is allocated to applied research projects. Main objectives of TA CR \glos{TA CR}{Technology agency of the Czech Republic} include:
+
+
+\begitems
+* analysis and realization of applied research programs,
+* evaluation of completed  R\&D projects,
+* provision of funds R\&D projects,
+* communication between business sector and research groups.
+\enditems
+
+
+\sec DAFOS data warehouse
+
+DAFOS is one the key results of the Proeval\cite[proeval] project. DAFOS data warehouse serves as a source of data used for purposes of Starfos full-text search engine, depicted in {\bf Figure \ref[FIG:starfos]} (for projects and results in the field of research, experimental development, and innovations that have been supported by public funds of the Czech Republic). DAFOS is not a platform for collecting data related to the research and application process from users, DAFOS only aggregates the data from various sources to later present them in a more readable way for the public.
+
+\medskip
+\clabel[FIG:starfos]{A view of the Starfos search engine}
+\picw=120mm\cinspic img/starfos-view.png 
+\raggedcenter/{\figure/f/A view of the Starfos search engine}
+
+\sec Domain
+
+The domain of data stored in DAFOS is projects and results in the field of research, experimental development and innovations that have been supported by public funds of the Czech Republic. 
+
+The domain model of key entities is presented in {\bf Figure \ref[FIG:VAVAI-domain]}. 
+
+\clabel[FIG:VAVAI-domain]{The domain model of critical entities in the warehouse}
+\picw=120mm\cinspic img/isvav-domain.png 
+\raggedcenter/{\figure/f/The domain model of critical entities in the warehouse}
+
+
+\beginsection
+Project
+
+The table contains information about projects, a particular R\&D \glos{R\&D}{Research and development} activity with a defined goal; there are over 50 thousand records currently present in the warehouse.
+
+
+\beginsection
+Results
+
+The table contains metadata about scientific publications, patents, trademarks, and other forms of applied research results; there are currently over 1 million records present in the database.
+
+\beginsection
+Organization
+
+The table contains information on real-world entities of various legal statuses i.e., business entities or universities. There are over 7 thousand records present.
+
+
+\sec Architecture
+
+DAFOS warehouse has a centralized architecture ~\cite[ariyachandra2006data] with the addition of the search engine part. The architecture of the warehouse was influenced by the need to support predefined queries over the data. The relational database is not the only destination of the data; data gets serialized and indexed by a Solr engine before it is presented to the end-user. This kind of architecture proved to be one the easiest architectures to implement and perfectly solves its purpose. No single architecture is dominant in terms of information and system quality ~\cite[ariyachandra2006data] and DAFOS is not an exception; the decision to use centralized architecture came solely from the requirements: start small and deliver short-term benefits while having a long term plan. The high-level view of the architecture is presented in {\bf Figure ~\ref[FIG:hl-arch]}.
+
+
+
+\clabel[FIG:hl-arch]{The high-level view of the architecture}
+\picw=120mm \cinspic img/dafos-arch-hl.png 
+\raggedcenter/{\figure/f/The high-level view of the architecture} 
+
+
+\label[srs]\chap Software requirements specification
+
+This chapter outlines software requirements for the new ETL framework that will serve as a platform for integrating new data sources into the DAFOS data warehouse. The main aim of this document is to define new requirements based on experience with the current system.
+
+\sec Surrounding the requirements
+
+Requirements for the new ETL framework are divided into three categories: business needs, data integration, and software requirements. The software requirements logically arise from the requirements of this thesis, which are:
+
+\label[req-list]\begitems \style n
+* decoupling importing scripts,
+* staging area with query capabilities,
+* refactoring data model, 
+* centralized log storage with query capabilities,
+* idempotency of individual importing steps,
+* data versioning,
+* tracking manual changes of data,
+* reports about newly changed data.
+\enditems
+
+\secc Business needs
+
+The biggest shortcoming of the DAFOS warehouse is how frequently data gets updated. As mentioned earlier, the process of importing data needs to be completely redone on every major update of data, and requires a lot of manual steps. Therefore, data gets updated approximately once every three months. A new ETL system will need to address this issue. The fully automated process comes with high risks; the developer team is no longer in charge of the process. Thus, there is a need to report changes in data that take place. One other point is that the final costs of the solution should be taken into account.
+
+A Summary of the business requirements:
+
+\begitems
+* Automation - ETL processes need to be fully automated and scheduled with little to no effort from the developer side,
+* Data lineage - the need for tracking changes of data,
+* Cost - cost to maintain, develop and run the solution should be minimal.
+\enditems
+These requirements are closely related to requirement number {\bf 1, 8, 6}.
+
+\secc Data integration requirements
+
+There are many data sources with a variety of output formats producing data that is later stored in multiple places. The new ETL system needs to  integrate these sources and provide a common interface to interact with them. As the number of source systems grows, need for unified storage of credentials for access becomes apparent. In order to have a better overview of incoming data, the data staging area needs to provide an easy-to-use interface for querying the data and sharing analytical information about them. 
+
+A summary of the data integration requirements:
+
+\begitems
+* Common interface for loading data - interface for importing data into a data warehouse should be as general as possible to make integrating a new source easier,
+* A set of tools for data extraction - set of utility functions/modules for standardized interaction with data staging area,
+* Data staging area - data should be accessible in the source format by the analytical and developer team before it is loaded into the destination database. Querying of the data needs to be supported.
+\enditems
+These requirements are closely related to requirement number {\bf 2, 5}.
+
+
+\secc Software requirements
+
+For a smoother transition, legacy processes that handled importing logic need to be fully supported into the new system, and their integration should be straight-forward. The new ETL system needs to address the issue of the speed of ETL processes. Parallelization of some steps in ETL processes is required and, therefore, a new system will act transparently when these requirements arise. Even though the chosen method will be tightly coupled with the current stack used in the project, it will still allow integrating new technologies into it, e.g. databases, frameworks for processing data.
+
+Summary of the software requirements:
+\begitems
+* Support for current modules - the absence of the need to completely rewrite the current system will help in the adoption of it,
+* Parallelization - each component of the ETL process will be easily parallelized if it is allowed to use multiprocessing 
+* Out of the box integration of other services - services like Google Cloud Platform can be easily integrated into the ETL process.
+
+\enditems
+
+\label[CHAP:ANAL]\chap An analysis of available workflow orchestration solutions
+It was decided that to allow automating of ETL scripts, a new framework or service would need to be integrated into the warehouse. Another solution could leverage the use of cron, but this tool proved to be insufficient because of the lack of triggering capabilities, i.e., run task A if task B had finished successfully. 
+
+There is a wide variety of systems used for the management of ETL workflows. Some of them are robust Saas solutions, while others are just simple libraries. The primary limits of Saas systems are the technologies surrounding them: they are deployed in the cloud and sometimes require the use of specific technologies designed for the particular cloud solution, i.e., AWS \glos{AWS}{Amazon Web Services} S3 or GCP \glos{GCP}{Google Cloud Platform}. There are great automation frameworks available for Hadoop and Spark; however, these are not suitable within our scenario, since neither of these systems are currently utilized in DAFOS nor do they pose any benefits in the current state of the warehouse.
+
+
+
+\sec Scope and purpose
+There is only a handful of open-source workflow managers that allow full control over the ETL life cycle, i.e. execution and scheduling of scripts, their dependency management and overview over the state of the scripts. Tools chosen for the analysis are expected to perfectly fit into the technology stack used in DAFOS. This means they are able to run python code and easily communicate with other services such as the database server and Solr server. The final candidate will support the biggest subset of the requirements defined in {\bf Chapter ~\ref[srs]}. 
+
+
+\secc Luigi
+
+Luigi\cite[Luigi] is an open-source tool for managing ETL pipelines. It was developed in Spotify. Luigi is implemented as a service: a web server that serves as a front-end for tracking the state of pipelines. Luigi was designed to run on a single computer, but it, nevertheless, allows the concurrent execution of tasks. Unfortunately, Luigi does not provide a native method of handling the scheduling of jobs and, thus, an alternative method would have to be developed.
+
+
+\beginsection
+Primitives
+
+The data pipeline, represented as a Python class, consists of {\it Task} classes. The task interface provides these methods:
+\begitems
+* requires() - definition of dependencies for the task,
+* output() - method defining outputs of the task, the method has to return persisted entity (value written to a file system, populated database table etc.) or another Task to declare dependency,
+* run() - a method that handles main logic of the step.
+\enditems
+
+\beginsection
+Details
+
+In order to provide a comfortable interface, all outputs of each task have to be stored on disk. The dependencies are represented as dependencies on targets, not tasks by themselves. This allows a secure mechanism for deciding whether a task is finished. If the target is saved on disk, the task execution was done.
+
+\sec Apache Airflow
+
+
+Apache Airflow\cite[Airflow] is an open-source project developed at Airbnb in 2014 that was merged into Apache Software Foundation in 2016. Airflow is a tool that provides the ETL team with everything associated with the heavy plumbing. Air-flow is implemented as a service running a server that serves as an adminis-trative and monitoring interface to the underlying processes. It also takes care of scheduling tasks and notifying the ETL team if any errors occurred. The package is available to download through PyPI.
+
+\beginsection
+Primitives
+
+The data pipeline, DAG, consists of {\bf Operator or Sensor} classes. Task interface provides these methods:
+
+\begitems
+* DAG - directed acyclic graph: data-pipeline, and its dependencies representation,
+* Operator - a node of the DAG, a wrapper around a callable that can be used to define a task. This abstraction allows for a better definition of the atomic steps of  the pipeline.
+\enditems
+
+\beginsection
+Details
+
+Airflow offers everything needed to successfully automate workflows that communicate with external services, i.e. managing connections, configurable parallelization, and much more.
+
+The only downside of this tool is resource consumption. Airflow also introduces the need to maintain a new database for storing metadata about individual tasks. Airflow definitely seems to be the most massive tool discussed in this chapter.
+
+
+\sec Dagster
+
+Dagster\cite[Dagster] is the youngest framework discussed. It was built with different principles in mind to provide some extra functionality compared to the other tools. Its architecture is very similar to the ones discussed before (a back-end server used for managing and monitoring of pipelines). 
+
+\beginsection
+Primitives
+
+\begitems
+* solid - unit of computation with inputs and outputs defined
+* pipeline - composition of solids
+\enditems
+
+\beginsection
+Details
+
+Dagster introduces a new feature not available in other tools: the static testing of solids. Every time the pipeline is to be executed, a set of tests is run against the schema of solid outputs and inputs. It also allows for the customization of a scheduler and provides a default cron scheduler.
+
+Unfortunately, Dagster does not allow the dynamic creation of solids from code nor the parallelization of tasks out of the box. Another service would have to be put in place (e.g., Celery) in order to allow horizontal scaling of workers.
+
+
+\sec Final Conclusion
+
+The tools discussed in this chapter are very similar to each other; all of them were built with different principles in mind, however. The question of finding the best candidate is somewhat subjective, one might prefer the external configuration of tasks using XML files over database tables, and technical at the same time. 
+
+\clabel[tools-compare]{A comparison of features available by each tool}
+\medskip
+\centerline{%
+\table{||l||c|c|c|}{\crl
+Feature & Airflow & Luigi & Dagster \crl
+\tskip.5ex
+    Pipeline visualization                          & yes       & yes   & yes \crl
+    Pipeline configuration decoupled from code      & yes       & no    & yes\crl
+    Utilities for testing                           & partially & no    & yes\crl
+    Paralelization out of the box                   & yes       & yes   & no\crl
+    Scheduling                                      & yes       & yes   & yes\crl
+    Triggering of tasks based on state of the previous tasks                                    & yes       & no    & yes\crl
+    Centralized log storage                         & yes       & no    & yes\crl
+    Support for workload distribution over more computing              & yes       & no    & yes\crl
+    Static pipeline testing                         & no        & no    & yes\crl
+    }}
+
+\par\nobreak\medskip
+\raggedcenter/{\figure/t/A comparison of features available by each tool}
+\medskip
+Looking at table \ref[tools-compare], Dagster covers nearly all elements needed for a complete ETL solution, and Luigi comes out as the most minimalistic solution. The question definitely boils down to choosing between Airflow and Dagster, because Luigi by itself does not cover as many of the requirements discussed in {\bf Chapter \ref[srs]} as the other tools. Before choosing the final candidate, both tools had to be manually tested.
+
+The testing was accomplished by writing a simple data pipeline for loading a patent classification from and focusing on how easy it is to write and test the pipeline, parallelize the pipeline, and find documentation.
+
+Airflow came out as the winning solution because it provides an easy to use interface for parallelization, even for individual parts of the pipeline. This is a much-needed requirement that was not satisfied by Dagster by default. The strict definition and validation of outputs and inputs of solids enforced by Dagster felt just too limiting to work with. The parameters of Airflow DAGs are stored in the code, but the tool provides a standard interface for storing all other metadata needed for pipeline (i.e., connections to source systems and services). This seems like a better approach as opposed to storing configurations for individual pipelines in XML files stored on disk. Another big difference between Dagster and Airflow is that Dagster does not allow the dynamic creation of pipelines in code. This limits the way the pipeline can be composed, and creating a number of tasks based on the responses from external systems becomes hard to achieve.
+
+Airflow came out as the most mature and robust solution with a great user base. Even though it has some disadvantages in the provided utilities for testing pipelines, it still provides the ETL team with everything needed for running pipelines.
+
+
+\label[CHAP:ISVAV-aut]\chap The automation of the current ETL processes
+
+The current implementation of the ETL framework in DAFOS is solely based on custom python scripts that are divided into only two stages: download (Extract) and import (Transform-Load). These scripts are represented as Django management commands for the purposes of using the Django context, primarily Django ORM inside the script. The scripts serve as an interface between developer and classes that perform the actual logic. Classes are divided based on the file format that is being consumed (XML, JSON, CSV) and the source of the data. Downloaded data is stored on the disk as raw files (untransformed XML files, transformed and aggregated zipped JSON files or responses from APIs cached in a sqlite database). This approach is highly inconsistent and requires heavy documentation.
+
+The automation of the whole process is non-trivial mainly because source systems do not provide good support for incremental updates. Therefore, every time the data needs to be updated, the whole database is built from the ground up. This is done because there is no way to decide what records have been changed. Sometimes these drawbacks require the process to be performed on the testing server first, and after it is fully completed, the data is dumped from the destination database into a file and later loaded into the production database. During this phase, the production app is unavailable, so the process usually takes place at night, when there is a minimum of users accessing the site.
+
+Since the process of importing R\&D results is sub-optimal, this process takes around 30 hours to finish, as there are many other entities present in response (such as organizations, solver, etc.). The current ETL process requires the developer’s attention because the current state of the script can only be examined by checking the logs. This is because a cumbersome full update of the data happens around twice a year, and takes a big bite of the commercial potential of the whole solution.
+
+
+\sec Analysis
+\secc As-is state 
+
+The key source of data is IS VaVaI\cite[VAVAI], other sources include ARES[9] and Google Places API. A high level view of components taking part in the data manipulation process is presented in {\bf Figure \ref[component]}
+
+\clabel[component]{The structure of components responsible for data retrieval and manipulation}
+\cinspic img/component.png 
+\raggedcenter/{\figure/f/The structure of components responsible for data retrieval and manipulation} 
+
+
+\begitems
+* IS VaVaI - information system of R\&D operated by the Office of the Government of the Czech Republic
+* ARES - registers of Economic Subjects / Entities
+* Google Maps Platform - geo data
+* static files - enumerations downloaded from various sources
+* data patches - changes of data performed by a human, these changes overwrite data downloaded from source systems.
+\enditems
+
+Data downloaded from these sources go through a complex data pipeline to later be stored and indexed in Solr. Records downloaded from source systems are stored on disk in the form of JSON and XML files; this allows us to minimize the load on the source systems because data do not have to be queried several times. The contents of these files are read by importing scripts, normalized, and saved into a relational database using Django ORM. When all the data from the staging area are saved, Solr imported scripts are run to denormailize the data and populate the Solr document store using HTTP API. This process is outlined in {\bf Figure \ref[FIG:flow]}.
+\medskip
+\clabel[FIG:flow]{he flow of data throughout the warehouse}
+\picw=130mm \cinspic img/isvav-data-flow.png 
+\raggedcenter/{\figure/f/The flow of data throughout the warehouse} 
+\medskip
+
+\secc To-be state 
+
+To ensure the least amount of write operations to the staging area and relational database, a new extra field was appended to every record stored: data hash. This field is a hash computed from the contents of the JSON files converted to Python dictionaries, so every time we want to download a new record, we have to check the data hash field first, if it matches the value stored in the staging area, this means that the record was not changed and we can skip it. The old way of importing data did not only go through  business logic changes, changes in the technologies used were also present.
+
+For better manipulation of the data in the staging environment, the file system had to be replaced by something more robust that would allow us to better query and analyze the data in the staging environment. MongoDB was chosen as the best candidate for the task. Here are the key benefits of using MongoDB instead of the file system to store JSON files:
+
+
+
+\begitems
+* Schemaless documents - schema of the stored data does not need to be known in advance, nevertheless it is possible to define it and require all documents to adhere to it.
+* Querying of the data - MongoDB allows us to filter the data in the collection. We can easily find records that match our query in a matter of seconds using a standard query language.
+* Parallelization - write and read operations can be quickly done in bulk \cite[mongo-batch]. This allows us to speed up the process without using any programming constructs like spinning up threads and processes.
+* Analysis - MongoDB Compass (GUI tool for a view of the database) has a dominant feature of analyzing field mappings of the data illustrated in {\bf Figure ~\ref[mongo-analyze]}. This serves as an excellent tool for analyzing  of the data types and statistics of field values. 
+* Sharing of data - the analytical team can easily access the data through GUI tools and share insights using standard approaches as opposed to getting access to the actual machine, using ssh to view and download the files and later process them. 
+\enditems
+
+\medskip
+\clabel[mongo-analyze]{A view of an analysis of MongoDB collection}
+\picw=130mm \cinspic img/mongo-analyze.png 
+\raggedcenter/{\figure/f/A view of an analysis of MongoDB collection}
+\medskip
+
+These changes represent a significant shift in the architecture of the whole solution reflected in {\bf Figure \ref[FIG:arch-to-be]} . The final solution was heavily influenced by the need to keep as much of the original code base as possible.
+
+
+\clabel[FIG:arch-to-be]{Changes in the architecture of the system, added systems are depicted in blue}
+\cinspic img/deployment-to-be.png  
+\raggedcenter/{\figure/f/Changes in the architecture of the system, added systems are depicted in blue}
+
+
+
+\label[CHAP:ISVAV-IMPLEMENT]\sec Implementation
+
+Apache Airflow was chosen as the system to handle the automation of the scripts. The way Airflow handles the automation was perfect for our use case: a class-based approach for defining logic that needs to be automated. It was straightforward to integrate old importing classes into Airflow because only one new Airflow Operator was created and later applied to all of them.
+
+\secc Data staging area
+Shift to using MongoDB as a data staging area was not the only change needed to support the requirement of incremental import of data. For the ability to decide which records were changed during the extraction part of the process, a few extra metadata fields were added to every record saved in the staging area.The schema of the record with metadata fields is reflected in {\bf Figure ~\ref[FIG:mongo-model]}. For a clear way of adhering to this schema, an ODM \glos{ODM}{Object document mapping} library, like mongongine\cite[mongoengine], could be used. Unfortunately, validation of each record slows down the saving and updating process significantly\cite[mongo-orm]. Therefore the presence of metadata fields and their comparing was only enforced on the level of app logic, not on the database level. 
+
+\medskip
+\clabel[FIG:mongo-model]{A model of the mongo record with metadata fields}
+\picw=50mm\cinspic img/mongo-record.png 
+\raggedcenter/{\figure/f/A model of the mongo record with metadata fields}
+\medskip
+
+Every time a record is being saved in the MongoDB, first the hash of the JSON transformed into a Python dictionary is computed and compared to the hash of stored record sharing the same code. This logic implies that every record can be uniquely identified by either combining several fields, and creating a key or by using natural key of the record. If hashes do not match, we have a record with changed fields and want to replace the original with the {\it to\_import} flag set to {\bf True}. This process is depicted in {\bf Figure ~\ref[FIG:mongo-hash-seq]}. This approach allowed us to identify the changed records needed to be imported. In order to speed up the process, a unique index on the {\it code} field is created when a collection is created. 
+
+\medskip
+\clabel[FIG:mongo-hash-seq]{The process of saving a record to the staging area}
+\picw=130mm\cinspic img/mongo-hash-seq.png 
+\raggedcenter/{\figure/f/The process of saving a record to the staging area}
+\medskip
+
+\label[CHAP:DATA-GOVERNANCE]\secc Data governance
+The full automation of ETL processes requires the developer team to find a new way of tracking changes in the data over time. Since the ETL process becomes something that will run on a recurring basis, rather than a one time process, logging the changes of data becomes an insufficient solution for keeping record of changed data. Three ways of handling this requirement were identified:
+
+\begitems
+* Database table - every time a record is updated or created, a new row containing information about the change is created.
+* Logging - information about the change is logged into a file and later aggregated using custom logic into a CSV report.
+* Data lineage framework integration - services like Apache Atlas are specifically designed to allow complex data governance. Every task would define inputs and outputs and propagate information about the changes to the service using REST API.
+\enditems
+
+It was decided to go through with the custom database table solution because it allows us to:
+
+
+\begitems
+* integrate the view over the data into the Django admin interface, shown {\bf Figure \ref[FIG:record-change-view]} to allow the filtering of the records,
+* comfortably share the insights about the changes using web interface as opposed to sharing custom CSV reports stored on disk,
+* track changes outside of the Airflow environment using the standard approach: the Django ORM instead of integrating a full-blown framework that would require the developer team to learn new technology.
+\enditems
+
+\beginsection
+Record changes
+
+For purposes of tracking changes of the records over time, a custom {\it RecordChange} model was created, its structure is described in {\bf Figure \ref[FIG:record-change]}. The main purpose of this model is to differentiate between created and updated records. In order to be able to track changes to any records, the Django content types framework \cite[contenttypes] was utilized. It represents and stores information about the models installed in the Django project. This framework, along with the generic foreign keys, allowed to create records referring to any model present in the project.
+
+\medskip
+\clabel[FIG:record-change]{The record change relation diagram}
+\cinspic img/record-change-model.png 
+\raggedcenter/{\figure/f/The record change relation diagram}
+\medskip
+
+\medskip
+\label[FIG:record-change-view]\cinspic img/record-change-view.png 
+\raggedcenter/{\figure/f/View of RecordChange admin interface}
+\medskip
+
+
+\label[CHAP:DATA-GOVERNANCE]\secc Common loading interface
+A fundamental abstraction was introduced to allow a unified approach to the loading phase of ETL: ImportedModel. It is an abstract Django model, shown in {\bf Figure \ref[FIG:imported-model]} that is that is expected to be subclassed by every model that will require a view of changes of it over time. The only method present in the model is responsible for two crucial tasks: performing a check on “data\_hash” field and ultimately saving precious time by not performing a write operation in the database if hashes of records are equal and the creation of  {\it RecordChange} records, discussed in the previous section, if the specific record has never been saved in the relational database or it has been modified. 
+
+
+\clabel[FIG:imported-model]{The ImportedModel interface}
+\picw=60mm\cinspic img/imported-model.png 
+\raggedcenter/{\figure/f/The ImportedModel interface}
+\medskip
+
+\secc Automation 
+
+Apache Airflow is equipped with everything needed for implementing the ETL process. Therefore, great emphasis was placed on using as many Airflow features as possible to make the project more maintainable and present the ETL process with all of its dependencies to the developer as clearly as possible.
+
+
+\beginsection
+Airflow
+
+To follow the requirement of integrating legacy scripts handling the process into a new system, one key operator, with a simple interface described in {\bf Code snipped \ref[CODE:ImporterOperator]}, was developed:
+
+\label[CODE:ImporterOperator]
+\ttline=-1
+% \verbinput (-) code/isvav-operator.py 
+\hisyntax{Py}
+\begtt
+class ImporterOperator(PythonOperator):
+
+    @apply_defaults
+    def __init__(
+            self,
+            importer_cls,
+            *args,
+            **kwargs,
+        ):
+        self.importer = importer_cls(very_verbose=True,)
+        super().__init__(self.importer.run,)
+
+    def execute(self, context):
+        super().execute(context,)
+\endtt
+\raggedcenter/{\figure/c/Importer operator interface}
+\medskip
+
+This allows us to pass a python class to a native Python Operator and execute the {\it run} method. Note that this approach does not entirely follow the principle that every operator should be atomic, because we are executing, transforming and loading logic in one step but it was necessary for easier adoption.
+
+
+
+\beginsection
+Secrets 
+
+
+Historically, the data needed to perform the downloading process, namely tokens for access to the RVVI API, were stored in the specific location on the disk, thus requiring the developer to know the location and document this part of the process. Airflow provides standard storage for secrets that can be shared across many processes using Airflow variables. Secrets are persisted in the Airflow metadata database and stored encrypted, so no one can see the contents without having the key for decryption.
+
+Instead of hardcoded connections in the code, Airflow connections were used to keep track of different kinds of source systems such as REST services defined by URL, or database connections. Airflow connections provide a general interface for storing all metadata associated with connections, e.g. schemes, authentication credentials. This data can be queried anywhere in the code, and most importantly, it is decoupled from the code itself. Airflow also provides a way to limit the number of sessions using the specified connection: {\it Airflow pools}. Pools limit the number of task instances that are using the connection. This can be helpful when tasks are run in parallel, and source systems define some kind of throttling.
+
+\beginsection
+Django
+
+Apache Airflow is a standalone app, and the Django context, namely app and model registry, is not provided by default. In order to be able to import modules from the Django app itself, the manual way of initialization of the Django context had to be developed (described in {\bf Code snippet \ref[CODE:django-setup], \ref[CODE:python-sys] and \ref[CODE:python-path] }).
+
+Challenges:
+\begitems
+* sys.path - in order to import modules from the Django app, top-level root package needs to be present in the sys.path global variable: a list of strings that specifies the search path for modules \cite[path].
+* Django context - Django settings and app registry need to be initialized to access Django ORM and values from the {\it settings} module.
+\enditems
+
+A simple script was created to fulfill the second requirement: initializing the Django context.
+
+\label[CODE:django-setup]
+\ttline=-1
+\hisyntax{Py}
+\begtt
+import os.environ as env
+import sys
+# module path to settings 
+env["DJANGO_SETTINGS_MODULE"] = "dafos.settings"
+
+import django
+
+django.setup()
+\endtt
+\raggedcenter/{\figure/c/Setting up the Django context}
+\medskip
+
+This script is not sufficient on its own because to import it successfully, its path has to be known  by the python interpreter. It would be possible to simply use logic defined in {\bf Code snippet \ref[CODE:python-sys]} every time this module is to be imported, though a different approach, described in {\bf Code snippet \ref[CODE:python-path]} was taken to follow the DRY principle. An environmental variable {\it PYTHONPATH} along with an installation dependent paths get propagated to sys.path on interpreter startup \cite[path]. This variable was used to allow imports of modules from the Django app in standalone scripts by simply adding a path to the top-level package to {\it PYTHONPATH} in a shell profile file (.bash\_profile, .zsh\_profile).
+
+\label[CODE:python-sys]
+\ttline=-1
+\hisyntax{Py}   
+\begtt
+import sys
+sys.path.append("/path/to/dafos-module")
+\endtt
+\raggedcenter/{\figure/c/Expanding Python path using sys module}
+\medskip
+
+\label[CODE:python-path]
+\ttline=-1
+\hisyntax{Py}
+\begtt
+export PYTHONPATH="${HOME}/dafos"
+\endtt
+\raggedcenter/{\figure/c/Expanding Python path using environmental variable}
+\medskip
+
+\beginsection
+Solr incremental updates
+
+In the past, the serialization of data into Solr was handled by iterating over every record in the database and serializing it one by one. This is no longer acceptable because this process would have to be run frequently and take a lot of time. For the reason of performing incremental updates of the data on a regular basis, a new way of discovering records for serialization needed to be found.
+
+This task is not trivial because schemas of Solr documents are highly nested, and changes to the related records and their fields need to be tracked. Two ways of handling this requirement are possible:
+
+\begitems
+* Individual selection - an individual selection of the records to be updated in the Solr collection based on the date of the last import,
+* Continuous integration - the serialization of record on every {\it save} or {\it update} event, for example using {\bf Django signals}.
+\enditems
+
+Manual selection using a predefined SQL query was identified as a better fit for the task because it eliminates redundant write operations in the Solr that would arise from the solution involving pub/sub pattern (even though it brings some inconsistency and harder maintainability of the code associated with the need to alter the queries with changes of the database schema). This approach requires a SQL query to be defined for every Solr collection. There are only three collections present in Solr, and their number is not expected to grow drastically.
+
+To identify newly changed records, RecordChange table, discussed in {\bf Chapter \ref[CHAP:DATA-GOVERNANCE]}, has to be queried for newly changed records and later synced to Solr. Since Solr documents are denormalized from the relational database schema and composed of many entities that belong together, like organization and result, it is not sufficient to only query one entity; we need to identify changes in related records as well. 
+
+A new model, shown in {\bf Figure \ref[FIG:solr-sync]} was created to decouple changes in records in the relational database and status of serialization of these records in Solr. SolrSyncStatus is a class providing an interface allowing to store information on what records have been stored in Solr. The content type framework, combined with generic keys, discussed before, was utilized to create relations between arbitrary models and SolrSyncStatus. It was possible to provide fields ``is\_synced'' and ``last\_synced'' as attributes of specific models, but it was decided to use a 1:1 relation to allow idempotency of Solr serialization step in the ETL. 
+
+The serialization process is composed of these steps: query newly changed records using the ``RecordChange'' model along with changed related entities, and sync them to the Solr while creating SolrSyncRecords to keep track of which records have been already indexed. 
+
+\medskip
+\clabel[FIG:solr-sync]{The SolrSyncStatus class diagra}
+\picw=90mm\cinspic img/solr-sync-status.png 
+\raggedcenter/{\figure/f/The SolrSyncStatus class diagram}
+\medskip
+
+\secc Summary
+The use of Airflow proved to be very beneficial for defining ETL. It was possible to clearly present the developer with a rather complicated process of ISVAV data set integration. The resulting DAG is presented in {\bf Figure \ref[FIG:isvav-dag]}.
+
+\medskip
+\clabel[FIG:isvav-dag]{A view of dependencies and state of individual tasks in resulting DAG}
+\picw=130mm\picheight=70mm\cinspic img/isvav-dag.png 
+\raggedcenter/{\figure/f/A view of dependencies and state of individual tasks in resulting DAG}
+\medskip
+
+
+\label[CHAP:ISVAV-TESTS]\sec Testing
+
+The implemented functionality was tested using the unit and integration tests. Only a few changes were made to the parsing logic, therefore, only a few unit tests covered these changes.
+
+Integration tests played a crucial role in asserting error-free interactions with the new service MongoDB. 
+
+\secc Integration tests
+Integration tests test whether the system as a whole operates as expected ~\cite[CI]. Several types of interactions could be tested using this approach: communication between classes, modules, or services. 
+For this reason, the definition of an integration test in this project is as follows:
+\begitems
+* it verifies how the system works in integration with external dependencies - database, data staging area, or services providing data,
+* it tests a particular data pipeline and its parts,
+* it tests the presence of  metadata needed for the DAG to function properly.
+\enditems
+
+
+\beginsection
+Approach
+
+\begitems
+* Do not mock dependencies over which you have full control (internal services). Using mocks to mimic services can get very tedious: rewriting substantial logic that is not in control of a developer.
+
+* Use ``production'', original database version, and always be as close to the production environment as possible. This requirement is sometimes hard to follow if no virtualization techniques are used e.g. Docker and Kubernetes. 
+
+* Mock dependencies over which we don't have control. No control dependency means you can't remove side effects after interaction with this dependency (external API).
+\enditems
+
+It was decided not to mock or stub the internal dependencies, so a way to provide them in tests needed to be developed. There are no CI or CD principles put in place in the project and the project itself is not containerized.
+
+One possible approach could include integrating a virtualization service such as Kubernetes, which could be used to simulate the production environment with all services available. This environment could be created on the test session creation and deleted on the session finish. Even though this approach could pave the way for containerization of the whole project for purposes of development, it was decided not to go through with it because it would introduce a new technology to learn and is far out of the scope of this thesis.
+
+The final solution performs a similar technique of automated initialization of internal services but without the use of virtualization services. The Pytest framework provides a perfect method for initialization and destruction of dependencies for tests, i.e. fixtures.
+
+
+\beginsection
+MongoDB
+
+The MongoDB dependency in tests was handled by spinning up a new system process running MongoDB on a different port and different database directory than the real production database. The same method as described in the previous chapter was used to provide the fixture in tests. A fixture with {\it session} scope was created for initializing MongoDB and another fixture with a “function” scope, inherited from it, was created to provide a database client and drop databases between each test run to ensure that MongoDB testing instance is initialized only once when required.
+
+\secc Test suite
+
+The functionality related to interacting with MongoDB was tested in {\it test\_mongo} test suite. This suite is centered  around testing of the interface for saving documents into the staging area: saving duplicates in one batch of saved records or asserting that specific flags are changed when contents of document change. 
+
+The {\it test\_record\_change} test suite is composed of integration tests that examine the functionality related to the creation of {\it RecordChange} records when a new entity is saved or modified and performing queries on newly revised records and related records. 
+
+The {\it test\_store\_data} test suite examined the logic of saving of raw data into the relational database and the creation of the {\it RecordChange} records. 
+
+\clabel[isvav-test-suite]{The test suite for newly implemented functionality}
+\medskip
+\centerline{
+\table{|l|l|}{\crl
+Test suite           & Test case \crl
+\tskip.5ex
+test\_mongo          & test\_fields\_added\_empty\_db                  \crl
+                     & test\_data\_change                              \cr 
+                     & test\_duplicate\_in\_batch                      \cr 
+                     & test\_extra\_fields                             \crl
+test\_record\_change & test\_basic\_usage                              \crl
+                     & test\_data\_types                               \cr
+                     & test\_changed\_since\_basic                     \cr
+                     & test\_changed\_since\_relevant\_relations\_basic\cr
+                     & test\_changed\_since\_relevant\_relations\_advanced\crl
+test\_store\_data    & test\_basic                                     \crl
+                     & test\_idempotency                               \crl  
+}}
+\raggedcenter/{\figure/t/The test suite for newly implemented functionality}
+\medskip
+
+\label[CHAP:PATSTAT-INTEGRATION]\chap Integrating the PATSTAT data source 
+
+Patents represent one of the most valuable types of a result of applied research. There are several organizations all over the world, notably WIPO \glos{WIPO}{World Intelectual Property Organization}, EPO and USPTO \glos{USPTO}{U.S Patent and Trademark Office} are overseeing the process of application and validation of patents. The process is somewhat standardized across the main continents; however there is no such thing as a worldwide patent or a central entity providing the data on patents. 
+
+\sec Analysis
+
+The RVVI API interface provides data on patents that were sponsored by funds from the Czech Republic, thus, they were already part of the results collection. This set of patents will be expanded by patents that were developed by Czech scientists or the ones that are active in the Czech Republic.
+
+\label[SEC:BR]\secc Business requirements
+
+The main point of interest are patent publications and applications from 2007 onward, with the designated or contracting state being the Czech Republic. For better decision making, these attributes of publication are the most relevant:
+
+\begitems
+* Publication code
+* Title
+* Classification
+* Citations
+* Application date
+* Publication date
+* Validity of patent
+* Designated contracting state
+* Applicant / proprietor
+* Applicant / proprietor (country)
+* Inventors
+* Inventor (country)
+\enditems
+
+Common attributes should be discovered among the current entities present in the warehouse. 
+\filbreak
+
+\secc Data sources
+
+Potential sources of data on patents are ``Open Data'' service from Czech Industrial Office \fnote{\url{https://isdv.upv.cz/webapp/webapp.opendata.tm}} and services provided by the European Patent Office. European Patent Office provides several methods of retrieving patents data in bulk suitable for our use case:
+
+\clabel[data-frmats]{Data formats and price comparison}
+\medskip
+\centerline{
+\table{|l|l|l|}{\crl
+Product name & Price & Format \crl
+\tskip.5ex
+    Open Patent Services & free         & REST, JSON \cr
+    DOCDB Bulk data set & 9100 €        & XML\cr
+    PATSTAT             & 975 €/year    & SQL\cr
+    PATSTAT online      & 975 €/year    & CSV\crl
+    }
+}
+\raggedcenter/{\figure/t/Data formats and price comparison}
+\medskip
+
+The biggest challenge was to choose the right data source for the task with minimum costs. It was also possible to utilize more than one source. The open data service of the Czech Industrial Office was not sufficient, because it does not explicitly declare whether the patent is valid nor does not provide information on patents applied through other patent offices. It does, on the other hand, provide weekly incremental updates of data. This could be very beneficial for the process of incremental updates of data. Looking at the price of the services offered by , Open Patent Services looks like a promising solution. The fact that it is the only an entirely free solution provided combined with the standard HTTP interface to query the data and the ability to transform it in any desirable way resulted in choosing OPS as the primary source of data. It would be easier to use the SQL database provided by EPO and maintain it apart from the central relational database used in the warehouse, but the final solution provides us with many benefits, not limited to:
+\begitems
+* the ability to have access to most up to date data provided by OPS,
+* the ability to transform and clean the raw data into desirable structures,
+* the ability to combine data already present in the warehouse with the newly integrated data set easily, notably RIV results and business subjects.
+\enditems
+
+Even though the final solution leveraging the use of HTTP interface over the use of static SQL tables is more complicated and time consuming, it offers many benefits that will be crucial in the long run.
+Unfortunately, OPS does not provide a reliable way to explicitly select a particular subset of patents, only the patents with contracting or designated state being the Czech Republic. Despite this, it is possible to query individual patents based on their codes. The new challenge was: how to get only codes for patents supporting our use case.
+
+
+To be able to obtain only the codes of patents in an acceptable format and manner, one manual step was needed in the data pipeline. It is possible to obtain a free subscription for PATSTAT \glos{PATSTAT}{EPO Worldwide Patent Statistical Database} online database for three months. The final subset of patents available for querying is limited to only the ones that were published through EPO, but this fact does not restrict us in any way. The only restricting outcome of this approach is not being able to automate the process of producing a report containing said patents because the interface of PATSTAT online is specifically designed to allow only human interaction using a limited subset of SQL directives. 
+
+
+\vfil \break
+
+\sec Implementation
+\secc Domain model
+The patent data set is covered by the content of the business needs described in {\bf Chapter \ref[SEC:BR]}. The resulting domain model is shown in {\bf Figure \ref[FIG:pat-DM]}.
+
+
+\clabel[FIG:pat-DM]{Patent data set domain model}
+\picheight=110mm\cinspic img/patents-relational-model.png 
+\raggedcenter/{\figure/f/Patent data set domain model}
+\filbreak
+
+\secc Data pipeline
+
+The Open Data Service from EPO was chosen as a primary source of up-to-date data. Unfortunately, the API interface does not support complex querying of the data, which makes the task of finding only a subset of patents that are valid in the Czech Republic unachievable using only this interface. In order to obtain codes of publications adhering to the requirement, other sources of data are needed.
+
+The PATSTAT data set represents a relational database accessible from the web interface or through buying the data set on a hard disk containing SQL scripts that can build the database. These services provide a more significant scope of the data than is needed and cost more than an acceptable price for such an overblown solution.
+
+A semi-automatic solution was chosen for the patents’ data pipeline. Only one manual step is required for the process of downloading the patents data set in order for the whole solution to be free of charge. PATSTAT online interface provides a way to create a free account that is valid for three months. This allows us to create SQL reports that can only contain patents that were processed by the EPO. The step of exporting a report of patent applications with fees paid for the Czech Republic will only happen once every 4 months since data on new patents get added at the same rate to the PATSTAT.
+
+The final flow of data in the pipeline is shown in {\bf Figure \ref[FIG:pat-data-flow]}. The data flow stages are very similar to the ones discussed in {\bf Chapter \ref[CHAP:ISVAV-aut]} in order to keep a unified approach for ETL processes across the whole warehouse.
+
+\filbreak
+\medskip
+\clabel[FIG:pat-data-flow]{Patents data pipeline}
+\picheight=180mm \picwidth=120mm \cinspic img/patents-data-flow.png 
+\raggedcenter/{\figure/f/Patents data pipeline}
+\medskip
+
+\secc Extract
+
+In order to provide a unified approach to the extract stage of the ETL process, the data staging area was used in the same way as in  {\bf Chapter \ref[CHAP:ISVAV-aut]}. Data has to be loaded into MongoDB first before it was be transformed and loaded into the operational database. The schema of the documents stored in the staging area is identical to {\bf Figure \ref[FIG:mongo-model]} to provide functionality for finding recently changed entities. 
+
+OPS provides many endpoints for querying information on specific subjects: classification, events, etc. Multiple endpoints were utilized for finding complete information on patents. Each set of records was assigned an individual MongoDB collection for a better decomposition of the loading phase. Each collection shared one common attribute: code of the patent in epodoc format to allow further aggregation. 
+
+Unfortunately, the OPS limits the number of concurrent requests to the service, so parallelization of the extraction phase was out of the question. 
+
+\filbreak
+\secc Transform
+
+The structure of data provided by source systems is not under the control of a developer, thus, establishing a common interface for this stage of the pipeline is not simple, if not impossible.
+
+There were attempts to do so historically. A hierarchy of importing classes was developed for pipelines that use ISVAV as a source system. These classes were distinguished by formats of the data (JSON, XML), types of source and destination storage (database tables, files), and the types of entities they are handling. This hierarchy poses a typical problem of taking a highly object-oriented approach of writing code: we want a banana but must build the jungle and gorillas first. This approach takes a heavy toll on the ability to unit test these classes. Mocking and stubbing unrelated functionality takes a lot of time and is hard to maintain, which results in most of the importing classes not being tested by unit tests. These drawbacks were taken into account when implementing the transforming interface for the patent data set.
+
+Since the schema of source documents provided by OPS is well defined and shared across different patent offices in Europe (and different services serving the data by OPS itself), we can supply a set of classes that transform standard python dictionaries without the need to differentiate between different types of source storage.
+
+This was achieved by defining a set of DTO classes,defined in {\bf Figrue \ref[FIG:extract-class-diagram]} handling only the transformation of data. To ease the problem of developing these classes, a new way of defining classes added in Python 3.7 was used: "@dataclass"\cite[dataclass]. This allows for easier development of DTO classes by removing the need to define "__init__" and "__repr__" methods as they are generated automatically  (thus, creating code which is easier to read).
+A simple example of dataclass used for defining DTO is described in {\bf Code snippet \ref[dataclass]}:
+
+\label[dataclass]
+\medskip
+\ttline=-1
+% \verbinput (-) code/isvav-operator.py 
+\hisyntax{Py}
+\begtt
+@dataclass
+class PatentDto(AbstractDto):
+    title_cs: str = None
+    title_en: str = None
+    abstract_cs: str = None
+    abstract_en: str = None
+
+    codes: PatentCodesDto = field(
+        init=False)
+    inventors: List[InventorDto] = field(
+        default_factory=list)
+    applicants: List[InventorDto] = field(
+        default_factory=list)
+    citations: List[CitationDto] = field(
+        default_factory=list)
+    classification: List[ClassificationDto] = field(
+        default_factory=list)
+
+    @staticmethod
+    def parse(data: dict) -> PatentDto:
+        ...
+
+    def save(self) -> Patent:
+        ....
+\endtt
+\raggedcenter/{\figure/c/Example of dataclass}
+
+Unfortunately, the dataclass interface limits the use of {\it @property} descriptors, therefore, in order to provide a standard methods of defining getters and setters, classic classes were used.
+
+This approach allows us to easily unit-test business logic as opposed to previous interface, where classes had to be instantiated with all of their dependencies met.This requires a lot of mocking and extra effort to test simple logic.
+
+
+\clabel[FIG:extract-class-diagram]{The class diagram of the extraction interface}
+\picheight=80mm\picw=100mm\cinspic img/extract-class-diagram.png
+\raggedcenter/{\figure/f/The class diagram of the extraction interface}
+\medskip
+
+\secc Load
+
+The loading stage of the pipeline is identical to the interface used in {\bf Chapter \ref[CHAP:ISVAV-aut]} in order to guarantee the creation of {\it RecordChange} records later used in monitoring the progress of pipelines and providing a way to find changed records that have to be indexed in Solr. 
+
+The loading phase consisted of two parts: loading of records into the relational database and later loading them into Solr. In order to speed up the process, loading was run in parallel with the ability to regulate the number of workers handling the loading phase. Even though Airflow provides a way to create tasks dynamically in a DAG, this functionality was insufficient. The execution plan of DAG has to be known at compile-time, i.e., the time when the DAG code gets parsed by the Airflow scheduler. This limits the parallelization because there is no way to determine the number of new documents to be loaded as this variable will be known later in the process when records have been extracted from source systems. In order to allow the parallelization of loading tasks, there is a need to have information on the total number of jobs running and current iteration. Then it is possible to query MongoDB limiting the number of retrieved records and skipping through them by batch size.
+
+\secc Automation
+
+Significant focus was placed on unifying the individual stages of the ETL process across all pipelines, but some trade-offs had to be made. The automation of the patent data set ETL processes was achieved through defining a set of Airflow operators handling communication across the source and destination services. In order to provide a unified approach for ETL, considerable focus was placed on using the Airflow interface as much as possible. This means, namely moving logic out of Django commands into Airflow operators and storing ETL metadata in the database instead of on disk to allow easy integration with Airflow. The following section will give more details on how different parts of Airflow framework were put to use:
+
+
+\beginsection
+Operators
+
+A set of Airflow Operators, pictured in {\bf Figure \ref[FIG:airflow-class]}, was created. These operators are where the logic is stored. They are meant to be reusable pieces of code but some serving a very specific use case
+
+
+\begitems
+* EPOSimpleHttpOperator - ensures that an access token needed for requests to OPS is present and up to date, if not it will be refreshed and populated to the headers of the request and saved to Airflow variable to allow its reuse by other operators.
+
+* EPOToMongoOperator - ensures that records downloaded from OPS to staging area conform to the schema defined in {\bf Figure \ref[FIG:mongo-model]}.
+
+* MultipleEPOToMongoOperator - allows to query OPS enpooint for multiple entity codes one by one
+
+* MongoToPostgresOpertor - operator for saving Mongo documents to destination tables in relational database using OpsDTO sub-classes.
+
+* DictToMongo - base operator for storing Python dictionaries in MongoDB while adhering to schema defined in {\bf Figure \ref[FIG:mongo-model]}.
+
+* MongoPatentToPostgresOperator - specific operator for storing patents from MongoDB in relational database with additional information located in various MongoDB collections.
+
+\enditems
+
+These operators are meant to be used across all DAGs that download data from OPS.
+
+\clabel[FIG:airflow-class]{A class diagram of extraction interface}
+\picheight=90mm\picw=140mm\cinspic img/airflow-operator-class-diagram.png
+\raggedcenter/{\figure/f/A class diagram of extraction interface}
+\medskip
+\beginsection 
+Connections
+
+The connections to external systems were defined using the Airflow connection interface. Connections provide a common interface for defining details of the connection and their reuse in DAGs. The details about the connections are accessible from the web admin interface and through code interface. In the case of standard HttpOperators, the developer is only required to specify the name of the connection, and the operator will handle all logic of getting the data about the connection by itself.
+
+To globally change the details of the connection, the admin interface  pictured in {\bf Figure \ref[FIG:airflow-connection]} can be usedthus, enabling anyone with the right permission to alter the details of connections without the need to change code.
+
+\medskip
+\clabel[FIG:airflow-connection]{}
+\picw=120mm\picheight=100mm\cinspic img/airflow-connections-int.png
+\raggedcenter/{\figure/f/An admin interface of connections in Airflow}
+
+\beginsection
+Variables 
+
+The Airflow variables serve as an interface to the centralized storage of data. Variables are accessible to the processes through the DAO layer shown in {\bf Figure \ref[airflow-variable]}. Any data that can be pickled using a python {\bf pickle} module can be stored in the variable. 
+
+\label[airflow-variable]
+\ttline=-1
+\hisyntax{Py}
+\begtt
+Variable.set(value="foo", key="bar")
+Variable.get(key="bar")
+\endtt
+\raggedcenter/{\figure/c/Variable DAO interface}
+\medskip
+
+These variables were used to store secrets and credentials needed for authorizing requests to OPS. The data stored in the variables, are encrypted and if the key of variable contains keywords such as {\it password} or {\it secret}, it won’t be available to view through the admin interface. This provides some sort of security as only people that have access to the encryption key can get hold of the stored value. Encryption is handled entirely by the Airflow framework and is therefore transparent to the developer.
+
+
+\label[CHAP:PATENTS-TESTS]\sec Testing
+
+Testing pipelines in data applications is very challenging, and results have low value because of the inability to simulate conditions in the production environment. Therefore, integration tests served as ``sane checks'' and are not meant to cover all possible scenarios since format of the source data can change over time.
+
+\secc Unit tests 
+
+The ETL interface for patent data set was specifically designed to allow easier testing through the means of decoupling the transforming and loading stage of the process using the DTO layer. The unit-tests, therefore, tested only the parsing and saving logic of the DTO layer.
+
+Parametrized tests were established for the purpose of testing data cleansing. Parametrized tests allow for testing multiple cases in one test run and clearer definition of inputs and outputs.
+\clabel[tests]{Parametrized tests}
+\ttline=-1
+\hisyntax{Py}
+\begtt
+country_in_out = [
+    (" [CZ] ", "CZ"),
+    (" [CZ]", "CZ"),
+    ("[CZ] ", "CZ"),
+    ("[CZ]", "CZ"),
+    ("* [CZ]* ", "CZ"),
+    ("[CZ]* ", "CZ"),
+    ("- [CZ] -", "CZ")
+]
+
+
+@pytest.mark.parametrize("raw, output", country_in_out)
+def test_country_dto_code_setter(raw, output):
+    country = CountryDto()
+    country.code = raw
+
+    assert country.code == output
+\endtt
+\raggedcenter/{\figure/c/Parametrized test example}
+\secc Integration tests
+
+The integration tests were mainly developed to test custom operators and perform smoke tests on the DAGs. The testing environment introduced in {\bf Chapter \ref[CHAP:ISVAV-TESTS]} was reused and another fixture was provided for the initialization of Airflow metadata DB.
+
+
+\beginsection
+Airflow metadata database
+
+For initiation of Airflow metadata database, a different database engine, sqlite, was used than the one used in the production . Sqlite is a database stored entirely on disk using a file. It provided an easy way to create and destroy the test databases to guarantee a fresh state of the database for each test session. This is somehow contrary to the points discussed in  {\bf Chapter \ref[CHAP:ISVAV-TESTS]}. However, it is an acceptable approach because the only limitation it brings is the inability to run processes in parallel.
+
+To only initialize the airflow database for the tests requiring it, pytest fixtures were used. Instead of blindly initializing it for all tests in pytest\_sessionstart, a fixture, described in {\bf Code snippet \ref[CODE:airflow-db]} with {\bf session} scope was created. The session scope of the fixture ensures that the fixture will only be created once per test session (if used in tests) and cached for use in all tests.  After the session has finished, the database will be destroyed along with all of the other dependencies. This was achieved by yielding the fixture, code after yield statement will be executed, when fixture goes out of the scope.
+
+\clabel[CODE:airflow-db]{Initialization/destruction of airflow metadata DB}
+\ttline=-1
+% \verbinput (-) code/isvav-operator.py 
+\hisyntax{Py}
+\begtt
+@pytest.fixture(scope='session')
+def airflow_test_db():
+    _setup_airflow()
+    yield
+    _kill_airflow()
+\endtt
+\raggedcenter/{\figure/c/Initialization/destruction of airflow metadata DB}
+
+
+\secc Test suite
+The complete test suite, shown in {\bf Table \ref[patstat-tests]}, was composed of integration and unit tests for the implemented functionality.
+
+Integration tests defined in the test\_airflow\_operators suite were testing logic associated with generation of authentication tokens on every request to OPS, retrieval of data from mocked sources and later saving them in destination databases. 
+
+The tests in test\_dto suite were testing logic responsible for parsing of raw JSON data and asserting that saved objects correspond to the parsed data. 
+
+\medskip
+\clabel[patstat-tests]{Test suite related to PATSTAT integration}
+\centerline{
+\table{||l|l|}{\crl
+Test suite           & Test case \crl
+\tskip.5ex
+test\_dto                & test\_country\_dto\_code\_setter \crl                                 
+                         & test\_country\_save                \cr                              
+                         & test\_inventor\_save\_multiple     \cr                              
+                         & test\_citation\_parse              \cr                              
+                         & test\_citation\_save               \cr                              
+                         & test\_non\_citation\_parse         \cr                              
+                         & test\_non\_patent\_citation\_save  \cr                              
+                         & test\_classification\_parse        \cr                              
+                         & test\_classification\_persist      \cr                              
+                         & test\_patent\_parse                \cr                              
+                         & test\_patent\_save                 \cr                              
+                         & test\_event\_parse                 \cr                              
+                         & test\_event\_save                  \crl                             
+test\_airflow\_operators & test\_EPOSimpleHttpOperator\_success\_no\_previous\_token        \crl
+                         & test\_EPOSimpleHttpOperator\_success\_previous\_empty            \cr
+                         & test\_EPOSimpleHttpOperator\_success\_previous\_not\_valid       \cr
+                         & test\_EPOSimpleHttpOperator\_success\_previous\_not\_changed     \cr
+                         & test\_EPOSimpleHttpOperator\_fail                                \cr
+                         & test\_get\_EPOHttpOperator\_single\_entity                       \cr
+                         & test\_get\_EPOHttpOperator\_post\_multiple\_entities             \cr
+                         & test\_EPOToMongoOperator\_no\_response\_key\_nor\_id\_field      \cr
+                         & test\_EPOToMongoOperator\_response\_key\_and\_id\_field          \cr
+                         & test\_get\_MongoToPostgres\_aggregate\_success                   \cr
+                         & test\_get\_MongoToPostgres\_aggregate\_additional\_data\_success \cr
+                         & test\_MultipleEPOToMongo\_operator \crl  
+}}
+\raggedcenter/{\figure/t/Test suite related to PATSTAT integration}
+\medskip
+
+
+
+
+\chap Conclusion
+The key objectives of this thesis were: 
+\begitems
+* perform an analysis of available orchestration solutions,
+* automate current ETL scripts,
+*integrate a new data set into a data warehouse using the chosen solution, providing a way to monitor the whole process. 
+\enditems
+
+After performing an analysis of the available industry-standard solutions for orchestrating of scripts in Python, described in {\bf Chapter \ref[CHAP:ANAL]}, and defining principal requirements for the final ETL framework in {\bf Chapter \ref[srs]}, the Apache Airflow was chosen as the best fit for the job of automating ETL processes in a DAFOS data warehouse. Simple automation of scripts was not enough, and the problem as a whole produced many sub-problems discussed in  {\bf Chapters \ref[CHAP:ISVAV-IMPLEMENT] }and {\bf \ref[CHAP:PATSTAT-INTEGRATION]}. MongoDB was utilized to provide a more robust solution for the data staging area and to allow querying and an analysis of staged data. All of the implemented functionality was tested using unit tests and integration tests; a basic testing strategy had to be established to allow that. Testing is described in greater detail in {\bf Chapters \ref[CHAP:ISVAV-TESTS]} and {\bf \ref[CHAP:PATENTS-TESTS]}.
+
+All of the requirements were satisfied with one exception: refactoring of the data model. It was decided that this task is out of the primary scope of this thesis because it does not explicitly relate to ETL in general; it just provides a cleaner way to structure the data in the database. The main idea behind this requirement is to allow further decoupling of the apps present in the project. Common entities that are imported from different sources would be saved in separate tables and later joined into one table containing foreign keys to the records of each separated tables. 
+
+Data from source systems is integrated periodically without the need for manual scheduling. Even though the dependencies between tasks and processes are still present, all of the individual tasks are idempotent. The resulting solution provides a developer with ETLs that are self-describing, i.e., their dependencies and state are accessible from the web interface. The developer team is not only capable of tracking the state of DAGs but also changes happening in data in real-time. It is possible to query logs of tasks and share insights using URLs to the web interface instead of sharing files containing this information. 
+
+\sec Further refinements
+
+The patent data set accessible from OPS provides data that is not thoroughly sanitized (errors occur during the conversion of character encoding, many unwanted and unpredictable characters are present in data).  Therefore, a great deal of effort needs to be put into data cleansing. Collective entities have to be found and later connected on the database level, in order to provide the end-user with a better product covering information on across the whole data warehouse. Even though all key implementation points were covered by the tests, some of them expect data schema that is in control of data providers; if the schema of data in the source systems changes, these changes will not be handled by tests. It would be beneficial to assert data expectations in tests to allow better maintainability of the project.
+
+The old  ETLs managing the IS VaVaI integration are still present in the project. However, it is necessary to rewrite them into the related Airflow abstractions, and further divide them into smaller units to have a unified and idempotent ETL approach and leverage Airflow's use across the whole warehouse. 
+
+As a developer is no longer in charge of the execution of ETLs, some ill-structured or corrupt data can get integrated into the data warehouse. A solution providing a way to version changes in the relational database would be beneficial to the maintainability of the final solution. The standard approach to this problem \cite[psql-archive] could be utilized. 
+
+\chap List of abbreviations used in the document
+\makeglos
+
+\bibchap
+
+%1
+\bib [dwh-spring] {VAISMAN, Alejandro and Esteban ZIMÁNYI.} {\it Data Warehouse Systems } [online]. 1. Berlin, Heidelberg: Springer Berlin Heidelberg, 2014 [cit. 2020-05-12]. DOI: 10.1007/978-3-642-54655-6. ISBN 978-3-642-54654-9. Available at \url{https://www.springer.com/gp/book/9783642546549}.
+%2
+\bib [master-dwh] {IMHOFF, Claudia, Nicholas GALEMMO and Jonathan G. GEIGER.} {\it Mastering Data Warehouse Design: Relational and Dimensional Techniques.} 1. Indianapolis, Indiana: Wiley Publishing, 2003. ISBN 0-471-32421-3.
+%3
+\bib [bi-pour] {POUR, Jan, Miloš MARYŠKA and Ota NOVOTNÝ.} {\it Business intelligence v podnikové praxi.} Praha: Professional Publishing, 2012. ISBN 978-80-7431-065-2.
+%4
+\bib [toolkit-etl] {KIMBALL, Ralph and Joe CASERTA.} {\it  The Data Warehouse ETL Toolkit: Practical Techniques for Extracting, Cleaning, Conforming, and Delivering Data. } 1. Indianapolis: Wiley Publishing, 2004. ISBN 0-764-57923-1.
+%5
+\bib [toolkit-dwh] {KIMBALL, Ralph and Margy ROSS.} {\it The data warehouse toolkit: the definitive guide to dimensional modeling.} 3rd ed. Indianapolis: Wiley, c2013. ISBN 978-1-118-53080-1.
+%6
+\bib [proeval] Evaluation report of Proeval project. Available at: \url{https://www.tacr.cz/o-nas/interni-projekty-ta-cr/projekt-proeval/}
+
+\bib [ariyachandra2006data] {ARIYACHANDRA, Thilini and Hugh J WATSON.} {\it Which data warehouse architecture is most successful?} Business intelligence journal. The Data Warehouse Institute, 2006, 11(1), 4.
+%7
+\bib [Luigi] Luigi documentation. Available at: \url{https://luigi.readthedocs.io/en/stable}.
+%8
+\bib [Airflow] Apache Airflow documentation. Available at: \url{https://airflow.apache.org/docs/stable}.
+%9
+\bib [Dagster] Dagster documentation. Available at: \url{https://docs.dagster.io/}.
+%10
+\bib [VAVAI] Publicly available data from IS VaVaI.
+Available at: \url{https://www.rvvi.cz}.
+%11
+\bib [mongo-batch] Documentation on parallelized Mongo bulk operations. Available at: \url{https://docs.mongodb.com/manual/reference/method/db.collection.initializeUnorderedBulkOp/}
+
+\bib[mongoengine] Mongoengine - object document mapping library. Available at: \url{http://mongoengine.org/}
+%12
+\bib[mongo-orm] Why ORM shouldn’t be your best bet. Available at: \url{https://medium.com/ameykpatil/why-orm-shouldnt-be-your-best-bet-fffb66314b1b}
+%13
+\bib [contenttypes] Django contenttypes framework. Available at: \url{https://docs.djangoproject.com/en/3.0/ref/contrib/contenttypes/}
+%14
+\bib [path] System-specific parameters and functions. Available at: \url{https://docs.python.org/3/library/sys.html}
+%15
+\bib [dataclass] Data Class Python enhancement proposal. Available at: \url{https://www.python.org/dev/peps/pep-0557/}.
+%16
+
+%17
+\bib [CI] {ROSSEL, Sander.} {\it  Continuous Integration, Delivery, and Deployment. } 1. Birmingham: Packt Publishing, 2017. ISBN 978-1-78728-661-0.
+%18
+\bib [ARES]  Publicly available data on business entities from Ministry of Finance of the Czech Republic \url{https://wwwinfo.mfcr.cz/ares/ares_es.html.cz}
+%19
+
+%20
+\bib[psql-archive] PostgreSQL: Continuous Archiving And Point-In-Time Recovery. Available at: \url{https://www.postgresql.org/docs/12/continuous-archiving.html}
+
+\app Contents of enclosed CD
+The CD enclosed with this thesis contain digital copy of this document and all sources needed to compile it in the {\it thesis} folder.
+
+The {\it src} folder contains minimal set of modules and packages needed to test the implemented functionality. It was needed to include many parts of the DAFOS project not covered by this thesis in order to run implemented functionality, notes on the self-written code are present in the {\it README} file 
+\ttline=-1
+\begtt
+src/ # code sources
+  - README.md # notes on installation procedure and package contents 
+thesis/ # sources of the tex document
+  - main.tex
+  - main.pdf # this document
+\endtt
+
+\nextoddpage
+
+\bye
